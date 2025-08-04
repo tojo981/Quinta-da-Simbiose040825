@@ -1,0 +1,2232 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#10b981">
+    <title>Quinta da Simbiose - Mirtilo</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Mirtilo">
+    <meta name="application-name" content="Quinta Mirtilo">
+    
+    <!-- React e React DOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Prevenir o pull-to-refresh no iOS */
+        html, body {
+            position: fixed;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #root {
+            height: 100%;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        input, select, textarea {
+            font-size: 16px !important;
+            -webkit-appearance: none;
+            border-radius: 0;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Ajuste para 6 abas */
+        .nav-grid-6 {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+        }
+        
+        /* Estilo para botões no iOS */
+        button {
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+        }
+        
+        /* Loading screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom right, #10b981, #0ea5e9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 9999;
+        }
+        
+        .loading-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #10b981;
+            border-radius: 3px;
+        }
+        
+        /* Safe area para iPhones com notch */
+        .safe-top {
+            padding-top: env(safe-area-inset-top);
+        }
+        
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-icon">
+            <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v20M2 12h20M6.5 6.5l11 11M17.5 6.5l-11 11"/>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold mb-2">Quinta da Simbiose</h2>
+        <p class="opacity-80">Gestão Mirtilo</p>
+    </div>
+    
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        // Componente de Ícone
+        const Icon = ({ name, size = 24, className = "" }) => {
+            useEffect(() => {
+                lucide.createIcons();
+            }, []);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        // App Principal
+        const MirtiloApp = () => {
+            // Estados
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [registos, setRegistos] = useState([]);
+            const [setores, setSetores] = useState([
+                { 
+                    id: 1, 
+                    nome: 'Setor A', 
+                    area: 0.8, 
+                    variedade: 'Duke', 
+                    plantasTotal: 800,
+                    gpsLink: ''
+                },
+                { 
+                    id: 2, 
+                    nome: 'Setor B', 
+                    area: 0.7, 
+                    variedade: 'Bluecrop', 
+                    plantasTotal: 700,
+                    gpsLink: ''
+                },
+                { 
+                    id: 3, 
+                    nome: 'Setor C', 
+                    area: 1.0, 
+                    variedade: 'Legacy', 
+                    plantasTotal: 1000,
+                    gpsLink: ''
+                }
+            ]);
+            const [producoes, setProducoes] = useState([]);
+            const [horasTrabalho, setHorasTrabalho] = useState([]);
+            const [operacoesCulturais, setOperacoesCulturais] = useState([]);
+            const [alertas, setAlertas] = useState([]);
+            const [weather, setWeather] = useState(null);
+            const [showRelatorios, setShowRelatorios] = useState(false);
+            const [showConfiguracao, setShowConfiguracao] = useState(false);
+            const [isInstallable, setIsInstallable] = useState(false);
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+            
+            // Estados dos formulários
+            const [showProducaoForm, setShowProducaoForm] = useState(false);
+            const [showHorasForm, setShowHorasForm] = useState(false);
+            const [showSetorForm, setShowSetorForm] = useState(false);
+            const [showOperacaoForm, setShowOperacaoForm] = useState(false);
+            const [editandoSetorId, setEditandoSetorId] = useState(null);
+            
+            const [novoRegisto, setNovoRegisto] = useState({
+                tipo: 'despesa',
+                categoria: '',
+                descricao: '',
+                valor: '',
+                data: new Date().toISOString().split('T')[0],
+                setor: ''
+            });
+            
+            const [novaProducao, setNovaProducao] = useState({
+                data: new Date().toISOString().split('T')[0],
+                setor: '',
+                quantidade: '',
+                qualidade: 'A'
+            });
+            
+            const [novasHoras, setNovasHoras] = useState({
+                data: new Date().toISOString().split('T')[0],
+                horaInicio: '',
+                horaFim: '',
+                tipo: 'manutencao',
+                descricao: ''
+            });
+            
+            const [novoSetor, setNovoSetor] = useState({
+                nome: '',
+                area: '',
+                variedade: '',
+                plantasTotal: '',
+                gpsLink: ''
+            });
+            
+            const [novaOperacao, setNovaOperacao] = useState({
+                data: new Date().toISOString().split('T')[0],
+                tipo: 'poda',
+                setor: '',
+                horaInicio: '',
+                horaFim: '',
+                temCusto: true,
+                custo: '',
+                descricao: ''
+            });
+            
+            // Ref para gráfico
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+            
+            // Remover loading screen após carregar
+            useEffect(() => {
+                setTimeout(() => {
+                    const loadingScreen = document.getElementById('loadingScreen');
+                    if (loadingScreen) {
+                        loadingScreen.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingScreen.style.display = 'none';
+                        }, 300);
+                    }
+                }, 1000);
+            }, []);
+            
+            // Detectar se pode instalar como PWA
+            useEffect(() => {
+                const handleBeforeInstallPrompt = (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                    setIsInstallable(true);
+                };
+                
+                window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+                
+                // Verificar se já está instalado
+                if (window.matchMedia('(display-mode: standalone)').matches) {
+                    setIsInstallable(false);
+                }
+                
+                return () => {
+                    window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+                };
+            }, []);
+            
+            // Função para instalar PWA
+            const handleInstallClick = async () => {
+                if (!deferredPrompt) return;
+                
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                if (outcome === 'accepted') {
+                    setIsInstallable(false);
+                }
+                
+                setDeferredPrompt(null);
+            };
+            
+            // Carregar dados do localStorage
+            useEffect(() => {
+                try {
+                    const dadosGuardados = {
+                        registos: localStorage.getItem('mirtiloRegistos'),
+                        setores: localStorage.getItem('mirtiloSetores'),
+                        producoes: localStorage.getItem('mirtiloProducoes'),
+                        horas: localStorage.getItem('mirtiloHoras'),
+                        operacoes: localStorage.getItem('mirtiloOperacoes'),
+                        alertas: localStorage.getItem('mirtiloAlertas')
+                    };
+                    
+                    if (dadosGuardados.registos) setRegistos(JSON.parse(dadosGuardados.registos));
+                    if (dadosGuardados.setores) setSetores(JSON.parse(dadosGuardados.setores));
+                    if (dadosGuardados.producoes) setProducoes(JSON.parse(dadosGuardados.producoes));
+                    if (dadosGuardados.horas) setHorasTrabalho(JSON.parse(dadosGuardados.horas));
+                    if (dadosGuardados.operacoes) setOperacoesCulturais(JSON.parse(dadosGuardados.operacoes));
+                    if (dadosGuardados.alertas) setAlertas(JSON.parse(dadosGuardados.alertas));
+                } catch (error) {
+                    console.error('Erro ao carregar dados:', error);
+                }
+            }, []);
+            
+            // Guardar dados
+            useEffect(() => {
+                localStorage.setItem('mirtiloRegistos', JSON.stringify(registos));
+            }, [registos]);
+            
+            useEffect(() => {
+                localStorage.setItem('mirtiloSetores', JSON.stringify(setores));
+            }, [setores]);
+            
+            useEffect(() => {
+                localStorage.setItem('mirtiloProducoes', JSON.stringify(producoes));
+            }, [producoes]);
+            
+            useEffect(() => {
+                localStorage.setItem('mirtiloHoras', JSON.stringify(horasTrabalho));
+            }, [horasTrabalho]);
+            
+            useEffect(() => {
+                localStorage.setItem('mirtiloOperacoes', JSON.stringify(operacoesCulturais));
+            }, [operacoesCulturais]);
+            
+            useEffect(() => {
+                localStorage.setItem('mirtiloAlertas', JSON.stringify(alertas));
+            }, [alertas]);
+            
+            // Buscar tempo
+            useEffect(() => {
+                const fetchWeather = async () => {
+                    try {
+                        const response = await fetch(
+                            'https://api.open-meteo.com/v1/forecast?latitude=40.6566&longitude=-7.9124&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe/Lisbon'
+                        );
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            setWeather({
+                                temp: Math.round(data.current.temperature_2m),
+                                humidity: Math.round(data.current.relative_humidity_2m),
+                                windSpeed: Math.round(data.current.wind_speed_10m)
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Erro ao buscar tempo:', error);
+                        setWeather({
+                            temp: 18,
+                            humidity: 65,
+                            windSpeed: 12
+                        });
+                    }
+                };
+                
+                fetchWeather();
+            }, []);
+            
+            // Atualizar ícones
+            useEffect(() => {
+                lucide.createIcons();
+            }, [activeTab]);
+            
+            // Funções de cálculo
+            const calcularTotal = (tipo) => {
+                return registos
+                    .filter(r => r.tipo === tipo)
+                    .reduce((total, r) => total + parseFloat(r.valor || 0), 0);
+            };
+            
+            const calcularProducaoTotal = () => {
+                return producoes.reduce((total, p) => total + parseFloat(p.quantidade || 0), 0);
+            };
+            
+            const calcularHorasTotal = () => {
+                return horasTrabalho.reduce((total, h) => {
+                    const inicio = new Date(`2000-01-01T${h.horaInicio}`);
+                    const fim = new Date(`2000-01-01T${h.horaFim}`);
+                    const horas = (fim - inicio) / (1000 * 60 * 60);
+                    return total + (horas > 0 ? horas : 0);
+                }, 0);
+            };
+            
+            const calcularHorasOperacoes = () => {
+                return operacoesCulturais.reduce((total, op) => {
+                    const inicio = new Date(`2000-01-01T${op.horaInicio}`);
+                    const fim = new Date(`2000-01-01T${op.horaFim}`);
+                    const horas = (fim - inicio) / (1000 * 60 * 60);
+                    return total + (horas > 0 ? horas : 0);
+                }, 0);
+            };
+            
+            const calcularCustoOperacoes = () => {
+                return operacoesCulturais
+                    .filter(op => op.temCusto && op.custo)
+                    .reduce((total, op) => total + parseFloat(op.custo || 0), 0);
+            };
+            
+            // Adicionar registo
+            const adicionarRegisto = () => {
+                if (!novoRegisto.categoria || !novoRegisto.valor) {
+                    alert('Preencha todos os campos obrigatórios');
+                    return;
+                }
+                
+                setRegistos([...registos, {
+                    ...novoRegisto,
+                    id: Date.now(),
+                    valor: parseFloat(novoRegisto.valor)
+                }]);
+                
+                setNovoRegisto({
+                    tipo: 'despesa',
+                    categoria: '',
+                    descricao: '',
+                    valor: '',
+                    data: new Date().toISOString().split('T')[0],
+                    setor: ''
+                });
+            };
+            
+            // Adicionar produção
+            const adicionarProducao = () => {
+                if (!novaProducao.setor || !novaProducao.quantidade) {
+                    alert('Preencha todos os campos obrigatórios');
+                    return;
+                }
+                
+                setProducoes([...producoes, {
+                    ...novaProducao,
+                    id: Date.now(),
+                    quantidade: parseFloat(novaProducao.quantidade)
+                }]);
+                
+                setNovaProducao({
+                    data: new Date().toISOString().split('T')[0],
+                    setor: '',
+                    quantidade: '',
+                    qualidade: 'A'
+                });
+                setShowProducaoForm(false);
+            };
+            
+            // Adicionar horas
+            const adicionarHoras = () => {
+                if (!novasHoras.horaInicio || !novasHoras.horaFim) {
+                    alert('Preencha as horas de início e fim');
+                    return;
+                }
+                
+                setHorasTrabalho([...horasTrabalho, {
+                    ...novasHoras,
+                    id: Date.now()
+                }]);
+                
+                setNovasHoras({
+                    data: new Date().toISOString().split('T')[0],
+                    horaInicio: '',
+                    horaFim: '',
+                    tipo: 'manutencao',
+                    descricao: ''
+                });
+                setShowHorasForm(false);
+            };
+            
+            // Adicionar operação cultural
+            const adicionarOperacao = () => {
+                if (!novaOperacao.tipo || !novaOperacao.setor || !novaOperacao.horaInicio || !novaOperacao.horaFim) {
+                    alert('Preencha todos os campos obrigatórios');
+                    return;
+                }
+                
+                if (novaOperacao.temCusto && !novaOperacao.custo) {
+                    alert('Por favor, insira o custo ou marque como "Não estimado"');
+                    return;
+                }
+                
+                const operacao = {
+                    ...novaOperacao,
+                    id: Date.now(),
+                    custo: novaOperacao.temCusto ? parseFloat(novaOperacao.custo) : null
+                };
+                
+                setOperacoesCulturais([...operacoesCulturais, operacao]);
+                
+                // Se tem custo, adicionar também aos registos financeiros
+                if (novaOperacao.temCusto && novaOperacao.custo) {
+                    const tipoOperacao = {
+                        'poda': 'Poda',
+                        'manutencao_entrelinha': 'Manutenção Entrelinha',
+                        'manutencao_infestantes': 'Manutenção Infestantes',
+                        'adubo_foliar': 'Adubo Foliar',
+                        'tratamento_fitosanitario': 'Tratamento Fitosanitário',
+                        'outros': 'Outras Operações'
+                    };
+                    
+                    const registoFinanceiro = {
+                        id: Date.now() + 1,
+                        tipo: 'despesa',
+                        categoria: 'tratamentos',
+                        descricao: `${tipoOperacao[novaOperacao.tipo]} - ${setores.find(s => s.id == novaOperacao.setor)?.nome || ''}`,
+                        valor: parseFloat(novaOperacao.custo),
+                        data: novaOperacao.data,
+                        setor: novaOperacao.setor
+                    };
+                    
+                    setRegistos([...registos, registoFinanceiro]);
+                }
+                
+                // Limpar formulário
+                setNovaOperacao({
+                    data: new Date().toISOString().split('T')[0],
+                    tipo: 'poda',
+                    setor: '',
+                    horaInicio: '',
+                    horaFim: '',
+                    temCusto: true,
+                    custo: '',
+                    descricao: ''
+                });
+                setShowOperacaoForm(false);
+            };
+            
+            // Adicionar/Editar setor
+            const salvarSetor = () => {
+                if (!novoSetor.nome || !novoSetor.area || !novoSetor.variedade || !novoSetor.plantasTotal) {
+                    alert('Preencha todos os campos obrigatórios');
+                    return;
+                }
+                
+                if (editandoSetorId) {
+                    // Editar setor existente
+                    setSetores(setores.map(s => 
+                        s.id === editandoSetorId 
+                            ? {
+                                ...s,
+                                nome: novoSetor.nome,
+                                area: parseFloat(novoSetor.area),
+                                variedade: novoSetor.variedade,
+                                plantasTotal: parseInt(novoSetor.plantasTotal),
+                                gpsLink: novoSetor.gpsLink
+                            }
+                            : s
+                    ));
+                } else {
+                    // Adicionar novo setor
+                    setSetores([...setores, {
+                        id: Date.now(),
+                        nome: novoSetor.nome,
+                        area: parseFloat(novoSetor.area),
+                        variedade: novoSetor.variedade,
+                        plantasTotal: parseInt(novoSetor.plantasTotal),
+                        gpsLink: novoSetor.gpsLink
+                    }]);
+                }
+                
+                // Limpar formulário
+                setNovoSetor({
+                    nome: '',
+                    area: '',
+                    variedade: '',
+                    plantasTotal: '',
+                    gpsLink: ''
+                });
+                setEditandoSetorId(null);
+                setShowSetorForm(false);
+            };
+            
+            // Editar setor
+            const iniciarEdicaoSetor = (setor) => {
+                setNovoSetor({
+                    nome: setor.nome,
+                    area: setor.area.toString(),
+                    variedade: setor.variedade,
+                    plantasTotal: setor.plantasTotal.toString(),
+                    gpsLink: setor.gpsLink || ''
+                });
+                setEditandoSetorId(setor.id);
+                setShowSetorForm(true);
+            };
+            
+            // Eliminar setor
+            const eliminarSetor = (id) => {
+                if (confirm('Tem certeza que deseja eliminar este setor?')) {
+                    setSetores(setores.filter(s => s.id !== id));
+                }
+            };
+            
+            // Exportar dados
+            const exportarDados = () => {
+                const dados = {
+                    versao: '1.0',
+                    dataExportacao: new Date().toISOString(),
+                    registos: registos,
+                    setores: setores,
+                    producoes: producoes,
+                    horasTrabalho: horasTrabalho,
+                    operacoesCulturais: operacoesCulturais,
+                    alertas: alertas
+                };
+                
+                const dataStr = JSON.stringify(dados, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                
+                const exportFileDefaultName = `quinta_simbiose_backup_${new Date().toLocaleDateString('pt-PT').replace(/\//g, '-')}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                linkElement.remove();
+                
+                alert('Dados exportados com sucesso! Guarde este ficheiro em local seguro.');
+            };
+            
+            // Importar dados
+            const importarDados = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const dados = JSON.parse(e.target.result);
+                        
+                        // Verificar se é um ficheiro válido
+                        if (!dados.versao || !dados.dataExportacao) {
+                            alert('Ficheiro inválido! Por favor, selecione um backup válido.');
+                            return;
+                        }
+                        
+                        // Confirmar importação
+                        const dataBackup = new Date(dados.dataExportacao).toLocaleDateString('pt-PT');
+                        if (confirm(`Tem a certeza que deseja importar o backup de ${dataBackup}? Isto irá substituir todos os dados atuais!`)) {
+                            // Importar dados
+                            if (dados.registos) setRegistos(dados.registos);
+                            if (dados.setores) setSetores(dados.setores);
+                            if (dados.producoes) setProducoes(dados.producoes);
+                            if (dados.horasTrabalho) setHorasTrabalho(dados.horasTrabalho);
+                            if (dados.operacoesCulturais) setOperacoesCulturais(dados.operacoesCulturais);
+                            if (dados.alertas) setAlertas(dados.alertas);
+                            
+                            alert('Dados importados com sucesso!');
+                            setShowConfiguracao(false);
+                        }
+                    } catch (error) {
+                        alert('Erro ao importar ficheiro! Verifique se é um backup válido.');
+                        console.error(error);
+                    }
+                };
+                reader.readAsText(file);
+                
+                // Limpar o input para permitir reimportar o mesmo ficheiro
+                event.target.value = '';
+            };
+            
+            // Gerar Relatório Financeiro PDF
+            const gerarRelatorioFinanceiro = () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Título
+                doc.setFontSize(20);
+                doc.text('Quinta da Simbiose - Relatório Financeiro', 105, 20, { align: 'center' });
+                
+                doc.setFontSize(12);
+                doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-PT')}`, 105, 30, { align: 'center' });
+                
+                // Resumo Anual
+                const anoAtual = new Date().getFullYear();
+                const receitasAno = registos
+                    .filter(r => r.tipo === 'receita' && new Date(r.data).getFullYear() === anoAtual)
+                    .reduce((total, r) => total + r.valor, 0);
+                const despesasAno = registos
+                    .filter(r => r.tipo === 'despesa' && new Date(r.data).getFullYear() === anoAtual)
+                    .reduce((total, r) => total + r.valor, 0);
+                const lucroAno = receitasAno - despesasAno;
+                
+                doc.setFontSize(16);
+                doc.text(`Resumo Anual ${anoAtual}`, 20, 50);
+                
+                doc.setFontSize(12);
+                doc.text(`Receitas: €${receitasAno.toFixed(2)}`, 20, 60);
+                doc.text(`Despesas: €${despesasAno.toFixed(2)}`, 20, 70);
+                doc.setFont(undefined, 'bold');
+                doc.text(`Lucro: €${lucroAno.toFixed(2)}`, 20, 80);
+                doc.setFont(undefined, 'normal');
+                
+                // Despesas por categoria
+                doc.setFontSize(14);
+                doc.text('Despesas por Categoria', 20, 100);
+                
+                const categorias = ['mao-obra', 'fertilizantes', 'tratamentos', 'outros'];
+                const categoriasNomes = {
+                    'mao-obra': 'Mão de Obra',
+                    'fertilizantes': 'Fertilizantes',
+                    'tratamentos': 'Tratamentos',
+                    'outros': 'Outros'
+                };
+                
+                let yPos = 110;
+                doc.setFontSize(11);
+                categorias.forEach(cat => {
+                    const total = registos
+                        .filter(r => r.tipo === 'despesa' && r.categoria === cat && new Date(r.data).getFullYear() === anoAtual)
+                        .reduce((sum, r) => sum + r.valor, 0);
+                    if (total > 0) {
+                        doc.text(`${categoriasNomes[cat]}: €${total.toFixed(2)}`, 30, yPos);
+                        yPos += 10;
+                    }
+                });
+                
+                // Resumo Mensal
+                doc.setFontSize(14);
+                doc.text('Resumo Mensal', 20, yPos + 20);
+                yPos += 30;
+                
+                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                doc.setFontSize(10);
+                
+                // Cabeçalho da tabela
+                doc.text('Mês', 30, yPos);
+                doc.text('Receitas', 70, yPos);
+                doc.text('Despesas', 110, yPos);
+                doc.text('Lucro', 150, yPos);
+                yPos += 5;
+                doc.line(20, yPos, 190, yPos);
+                yPos += 5;
+                
+                meses.forEach((mes, index) => {
+                    const receitasMes = registos
+                        .filter(r => {
+                            const data = new Date(r.data);
+                            return r.tipo === 'receita' && 
+                                   data.getMonth() === index && 
+                                   data.getFullYear() === anoAtual;
+                        })
+                        .reduce((sum, r) => sum + r.valor, 0);
+                    
+                    const despesasMes = registos
+                        .filter(r => {
+                            const data = new Date(r.data);
+                            return r.tipo === 'despesa' && 
+                                   data.getMonth() === index && 
+                                   data.getFullYear() === anoAtual;
+                        })
+                        .reduce((sum, r) => sum + r.valor, 0);
+                    
+                    if (receitasMes > 0 || despesasMes > 0) {
+                        doc.text(mes, 30, yPos);
+                        doc.text(`€${receitasMes.toFixed(2)}`, 70, yPos);
+                        doc.text(`€${despesasMes.toFixed(2)}`, 110, yPos);
+                        doc.text(`€${(receitasMes - despesasMes).toFixed(2)}`, 150, yPos);
+                        yPos += 10;
+                    }
+                });
+                
+                // Guardar PDF
+                doc.save(`relatorio_financeiro_${anoAtual}.pdf`);
+            };
+            
+            // Gerar Relatório Operações Culturais PDF
+            const gerarRelatorioOperacoes = () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Título
+                doc.setFontSize(20);
+                doc.text('Quinta da Simbiose - Operações Culturais', 105, 20, { align: 'center' });
+                
+                doc.setFontSize(12);
+                doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-PT')}`, 105, 30, { align: 'center' });
+                
+                // Resumo Anual
+                const anoAtual = new Date().getFullYear();
+                const operacoesAno = operacoesCulturais.filter(op => 
+                    new Date(op.data).getFullYear() === anoAtual
+                );
+                
+                const horasAno = operacoesAno.reduce((total, op) => {
+                    const inicio = new Date(`2000-01-01T${op.horaInicio}`);
+                    const fim = new Date(`2000-01-01T${op.horaFim}`);
+                    const horas = (fim - inicio) / (1000 * 60 * 60);
+                    return total + (horas > 0 ? horas : 0);
+                }, 0);
+                
+                const custoAno = operacoesAno
+                    .filter(op => op.temCusto && op.custo)
+                    .reduce((total, op) => total + op.custo, 0);
+                
+                doc.setFontSize(16);
+                doc.text(`Resumo Anual ${anoAtual}`, 20, 50);
+                
+                doc.setFontSize(12);
+                doc.text(`Total de Operações: ${operacoesAno.length}`, 20, 60);
+                doc.text(`Horas Totais: ${horasAno.toFixed(1)} horas`, 20, 70);
+                doc.text(`Custo Total: €${custoAno.toFixed(2)}`, 20, 80);
+                
+                // Por tipo de operação
+                doc.setFontSize(14);
+                doc.text('Resumo por Tipo de Operação', 20, 100);
+                
+                const tiposOperacao = {
+                    'poda': 'Poda',
+                    'manutencao_entrelinha': 'Manutenção Entrelinha',
+                    'manutencao_infestantes': 'Manutenção Infestantes',
+                    'adubo_foliar': 'Adubo Foliar',
+                    'tratamento_fitosanitario': 'Tratamento Fitosanitário',
+                    'outros': 'Outros'
+                };
+                
+                let yPos = 110;
+                doc.setFontSize(11);
+                
+                Object.entries(tiposOperacao).forEach(([tipo, nome]) => {
+                    const operacoesTipo = operacoesAno.filter(op => op.tipo === tipo);
+                    if (operacoesTipo.length > 0) {
+                        const horasTipo = operacoesTipo.reduce((total, op) => {
+                            const inicio = new Date(`2000-01-01T${op.horaInicio}`);
+                            const fim = new Date(`2000-01-01T${op.horaFim}`);
+                            const horas = (fim - inicio) / (1000 * 60 * 60);
+                            return total + (horas > 0 ? horas : 0);
+                        }, 0);
+                        
+                        const custoTipo = operacoesTipo
+                            .filter(op => op.temCusto && op.custo)
+                            .reduce((total, op) => total + op.custo, 0);
+                        
+                        doc.text(`${nome}: ${operacoesTipo.length} operações, ${horasTipo.toFixed(1)}h, €${custoTipo.toFixed(2)}`, 30, yPos);
+                        yPos += 10;
+                    }
+                });
+                
+                // Resumo Mensal
+                doc.setFontSize(14);
+                doc.text('Resumo Mensal', 20, yPos + 20);
+                yPos += 30;
+                
+                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                doc.setFontSize(10);
+                
+                // Cabeçalho da tabela
+                doc.text('Mês', 30, yPos);
+                doc.text('Nº Op.', 60, yPos);
+                doc.text('Horas', 90, yPos);
+                doc.text('Custo', 120, yPos);
+                yPos += 5;
+                doc.line(20, yPos, 190, yPos);
+                yPos += 5;
+                
+                meses.forEach((mes, index) => {
+                    const operacoesMes = operacoesAno.filter(op => 
+                        new Date(op.data).getMonth() === index
+                    );
+                    
+                    if (operacoesMes.length > 0) {
+                        const horasMes = operacoesMes.reduce((total, op) => {
+                            const inicio = new Date(`2000-01-01T${op.horaInicio}`);
+                            const fim = new Date(`2000-01-01T${op.horaFim}`);
+                            const horas = (fim - inicio) / (1000 * 60 * 60);
+                            return total + (horas > 0 ? horas : 0);
+                        }, 0);
+                        
+                        const custoMes = operacoesMes
+                            .filter(op => op.temCusto && op.custo)
+                            .reduce((total, op) => total + op.custo, 0);
+                        
+                        doc.text(mes, 30, yPos);
+                        doc.text(operacoesMes.length.toString(), 60, yPos);
+                        doc.text(`${horasMes.toFixed(1)}h`, 90, yPos);
+                        doc.text(`€${custoMes.toFixed(2)}`, 120, yPos);
+                        yPos += 10;
+                    }
+                });
+                
+                // Guardar PDF
+                doc.save(`relatorio_operacoes_culturais_${anoAtual}.pdf`);
+            };
+            
+            // Criar gráfico
+            const criarGrafico = () => {
+                if (!chartRef.current) return;
+                
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+                
+                const ctx = chartRef.current.getContext('2d');
+                const ultimosMeses = [];
+                const dados = [];
+                
+                for (let i = 5; i >= 0; i--) {
+                    const data = new Date();
+                    data.setMonth(data.getMonth() - i);
+                    ultimosMeses.push(data.toLocaleDateString('pt-PT', { month: 'short' }));
+                    
+                    const despesasMes = registos
+                        .filter(r => {
+                            const dataRegisto = new Date(r.data);
+                            return r.tipo === 'despesa' && 
+                                   dataRegisto.getMonth() === data.getMonth() && 
+                                   dataRegisto.getFullYear() === data.getFullYear();
+                        })
+                        .reduce((total, r) => total + r.valor, 0);
+                    
+                    dados.push(despesasMes);
+                }
+                
+                chartInstance.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ultimosMeses,
+                        datasets: [{
+                            label: 'Despesas (€)',
+                            data: dados,
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            };
+            
+            // Renderizar Dashboard
+            const renderDashboard = () => {
+                const totalReceitas = calcularTotal('receita');
+                const totalDespesas = calcularTotal('despesa');
+                const lucro = totalReceitas - totalDespesas;
+                const producaoTotal = calcularProducaoTotal();
+                const horasTotal = calcularHorasTotal();
+                const horasOperacoes = calcularHorasOperacoes();
+                
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Dashboard</h2>
+                        
+                        {/* Widget Tempo */}
+                        {weather && (
+                            <div className="bg-gradient-to-br from-sky-100 to-sky-200 p-4 rounded-xl shadow-md mb-6">
+                                <h3 className="font-bold text-sky-800 mb-2">Tempo em Viseu</h3>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-3xl font-bold text-sky-800">{weather.temp}°C</p>
+                                        <p className="text-sm text-sky-600">Humidade: {weather.humidity}%</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm text-sky-600">Vento: {weather.windSpeed} km/h</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Cards resumo */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-green-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-green-700">Receitas</p>
+                                <p className="text-xl font-bold text-green-800">€{totalReceitas.toFixed(2)}</p>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-red-700">Despesas</p>
+                                <p className="text-xl font-bold text-red-800">€{totalDespesas.toFixed(2)}</p>
+                            </div>
+                            <div className={`${lucro >= 0 ? 'bg-sky-50' : 'bg-orange-50'} p-4 rounded-xl shadow`}>
+                                <p className={`text-sm ${lucro >= 0 ? 'text-sky-700' : 'text-orange-700'}`}>Lucro</p>
+                                <p className={`text-xl font-bold ${lucro >= 0 ? 'text-sky-800' : 'text-orange-800'}`}>
+                                    €{lucro.toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="bg-purple-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-purple-700">Produção</p>
+                                <p className="text-xl font-bold text-purple-800">{producaoTotal.toFixed(1)} kg</p>
+                            </div>
+                        </div>
+                        
+                        {/* Card de Horas */}
+                        <div className="bg-indigo-50 p-4 rounded-xl shadow mb-6">
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="font-bold text-indigo-800">Horas de Trabalho</h3>
+                                <button 
+                                    onClick={() => setShowHorasForm(true)}
+                                    className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-sm"
+                                >
+                                    Registar
+                                </button>
+                            </div>
+                            <p className="text-2xl font-bold text-indigo-800">{(horasTotal + horasOperacoes).toFixed(1)}h</p>
+                            <p className="text-sm text-indigo-600">
+                                Geral: {horasTotal.toFixed(1)}h | Operações: {horasOperacoes.toFixed(1)}h
+                            </p>
+                        </div>
+                        
+                        {/* Gráfico */}
+                        <div className="bg-white p-4 rounded-xl shadow">
+                            <h3 className="font-bold text-gray-800 mb-4">Evolução de Despesas</h3>
+                            <div className="h-48">
+                                <canvas ref={chartRef}></canvas>
+                            </div>
+                        </div>
+                        
+                        {/* Botão Relatórios */}
+                        <div className="mt-6 text-center">
+                            <button 
+                                onClick={() => setShowRelatorios(true)}
+                                className="bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2"
+                            >
+                                <Icon name="file-text" size={20} />
+                                Gerar Relatórios PDF
+                            </button>
+                        </div>
+                        
+                        {/* Botão Instalar PWA */}
+                        {isInstallable && (
+                            <div className="mt-4 text-center">
+                                <button 
+                                    onClick={handleInstallClick}
+                                    className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2"
+                                >
+                                    <Icon name="download" size={20} />
+                                    Instalar App
+                                </button>
+                            </div>
+                        )}
+                        
+                        {/* Modal Relatórios */}
+                        {showRelatorios && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md">
+                                    <h3 className="font-bold text-gray-800 mb-4 text-lg">Relatórios Disponíveis</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-gray-50 rounded-lg">
+                                            <h4 className="font-semibold text-gray-800 mb-2">Relatório Financeiro</h4>
+                                            <p className="text-sm text-gray-600 mb-3">
+                                                Resumo anual de receitas e despesas, com detalhamento mensal e por categoria.
+                                            </p>
+                                            <button 
+                                                onClick={() => {
+                                                    gerarRelatorioFinanceiro();
+                                                    setShowRelatorios(false);
+                                                }}
+                                                className="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
+                                            >
+                                                <Icon name="download" size={18} />
+                                                Gerar PDF
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="p-4 bg-gray-50 rounded-lg">
+                                            <h4 className="font-semibold text-gray-800 mb-2">Relatório Operações Culturais</h4>
+                                            <p className="text-sm text-gray-600 mb-3">
+                                                Resumo anual e mensal de operações culturais, com horas e custos por tipo.
+                                            </p>
+                                            <button 
+                                                onClick={() => {
+                                                    gerarRelatorioOperacoes();
+                                                    setShowRelatorios(false);
+                                                }}
+                                                className="w-full bg-teal-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2"
+                                            >
+                                                <Icon name="download" size={18} />
+                                                Gerar PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => setShowRelatorios(false)}
+                                        className="mt-4 w-full bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold"
+                                    >
+                                        Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // Renderizar Registos
+            const renderRegistos = () => {
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Registos Financeiros</h2>
+                        
+                        {/* Formulário */}
+                        <div className="bg-white p-4 rounded-xl shadow mb-6">
+                            <h3 className="font-bold text-gray-800 mb-4">Novo Registo</h3>
+                            <div className="space-y-3">
+                                <select 
+                                    className="w-full p-3 border rounded-lg"
+                                    value={novoRegisto.tipo}
+                                    onChange={(e) => setNovoRegisto({...novoRegisto, tipo: e.target.value})}
+                                >
+                                    <option value="despesa">Despesa</option>
+                                    <option value="receita">Receita</option>
+                                </select>
+                                
+                                <select 
+                                    className="w-full p-3 border rounded-lg"
+                                    value={novoRegisto.categoria}
+                                    onChange={(e) => setNovoRegisto({...novoRegisto, categoria: e.target.value})}
+                                >
+                                    <option value="">Selecione categoria...</option>
+                                    {novoRegisto.tipo === 'despesa' ? (
+                                        <>
+                                            <option value="mao-obra">Mão de Obra</option>
+                                            <option value="fertilizantes">Fertilizantes</option>
+                                            <option value="tratamentos">Tratamentos</option>
+                                            <option value="outros">Outros</option>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <option value="vendas">Vendas</option>
+                                            <option value="subsidios">Subsídios</option>
+                                            <option value="outros">Outros</option>
+                                        </>
+                                    )}
+                                </select>
+                                
+                                <input 
+                                    type="text"
+                                    placeholder="Descrição"
+                                    className="w-full p-3 border rounded-lg"
+                                    value={novoRegisto.descricao}
+                                    onChange={(e) => setNovoRegisto({...novoRegisto, descricao: e.target.value})}
+                                />
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <input 
+                                        type="number"
+                                        placeholder="Valor (€)"
+                                        className="w-full p-3 border rounded-lg"
+                                        value={novoRegisto.valor}
+                                        onChange={(e) => setNovoRegisto({...novoRegisto, valor: e.target.value})}
+                                    />
+                                    <input 
+                                        type="date"
+                                        className="w-full p-3 border rounded-lg"
+                                        value={novoRegisto.data}
+                                        onChange={(e) => setNovoRegisto({...novoRegisto, data: e.target.value})}
+                                    />
+                                </div>
+                                
+                                <button 
+                                    onClick={adicionarRegisto}
+                                    className="w-full bg-green-600 text-white p-3 rounded-lg font-semibold"
+                                >
+                                    Adicionar Registo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Lista */}
+                        <div className="bg-white rounded-xl shadow overflow-hidden">
+                            <h3 className="font-bold text-gray-800 p-4 bg-gray-50">Histórico</h3>
+                            <div className="max-h-96 overflow-y-auto">
+                                {registos.length === 0 ? (
+                                    <p className="p-8 text-center text-gray-500">Sem registos ainda</p>
+                                ) : (
+                                    registos.slice().reverse().map(registo => (
+                                        <div key={registo.id} className="p-4 border-b">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                                            registo.tipo === 'receita' 
+                                                                ? 'bg-green-100 text-green-700' 
+                                                                : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                            {registo.tipo}
+                                                        </span>
+                                                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                            {registo.categoria}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm font-medium">{registo.descricao || 'Sem descrição'}</p>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        {new Date(registo.data).toLocaleDateString('pt-PT')}
+                                                    </p>
+                                                </div>
+                                                <p className={`font-bold ${
+                                                    registo.tipo === 'receita' ? 'text-green-700' : 'text-red-700'
+                                                }`}>
+                                                    €{registo.valor.toFixed(2)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+            
+            // Renderizar Produção
+            const renderProducao = () => {
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Produção</h2>
+                        
+                        <button 
+                            onClick={() => setShowProducaoForm(true)}
+                            className="w-full bg-emerald-600 text-white p-3 rounded-lg font-semibold mb-6"
+                        >
+                            Registar Produção
+                        </button>
+                        
+                        {/* Resumo */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-emerald-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-emerald-700">Total Colhido</p>
+                                <p className="text-xl font-bold text-emerald-800">
+                                    {calcularProducaoTotal().toFixed(1)} kg
+                                </p>
+                            </div>
+                            <div className="bg-sky-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-sky-700">Média/Setor</p>
+                                <p className="text-xl font-bold text-sky-800">
+                                    {setores.length > 0 ? (calcularProducaoTotal() / setores.length).toFixed(1) : 0} kg
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {/* Lista */}
+                        <div className="bg-white rounded-xl shadow overflow-hidden">
+                            <h3 className="font-bold text-gray-800 p-4 bg-gray-50">Histórico de Produção</h3>
+                            <div className="max-h-96 overflow-y-auto">
+                                {producoes.length === 0 ? (
+                                    <p className="p-8 text-center text-gray-500">Sem registos de produção</p>
+                                ) : (
+                                    producoes.slice().reverse().map(producao => (
+                                        <div key={producao.id} className="p-4 border-b">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                                            {setores.find(s => s.id == producao.setor)?.nome}
+                                                        </span>
+                                                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                            Qualidade {producao.qualidade}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        {new Date(producao.data).toLocaleDateString('pt-PT')}
+                                                    </p>
+                                                </div>
+                                                <p className="font-bold text-emerald-700">
+                                                    {producao.quantidade} kg
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Modal Produção */}
+                        {showProducaoForm && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-5 rounded-xl shadow-xl w-full max-w-md">
+                                    <h3 className="font-bold text-gray-800 mb-4">Nova Produção</h3>
+                                    <div className="space-y-3">
+                                        <input 
+                                            type="date"
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novaProducao.data}
+                                            onChange={(e) => setNovaProducao({...novaProducao, data: e.target.value})}
+                                        />
+                                        <select 
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novaProducao.setor}
+                                            onChange={(e) => setNovaProducao({...novaProducao, setor: e.target.value})}
+                                        >
+                                            <option value="">Selecione o setor...</option>
+                                            {setores.map(s => (
+                                                <option key={s.id} value={s.id}>{s.nome}</option>
+                                            ))}
+                                        </select>
+                                        <input 
+                                            type="number"
+                                            placeholder="Quantidade (kg)"
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novaProducao.quantidade}
+                                            onChange={(e) => setNovaProducao({...novaProducao, quantidade: e.target.value})}
+                                        />
+                                        <select 
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novaProducao.qualidade}
+                                            onChange={(e) => setNovaProducao({...novaProducao, qualidade: e.target.value})}
+                                        >
+                                            <option value="A">Qualidade A</option>
+                                            <option value="B">Qualidade B</option>
+                                            <option value="C">Qualidade C</option>
+                                        </select>
+                                        <div className="flex gap-3">
+                                            <button 
+                                                onClick={adicionarProducao}
+                                                className="flex-1 bg-green-600 text-white p-3 rounded-lg font-semibold"
+                                            >
+                                                Guardar
+                                            </button>
+                                            <button 
+                                                onClick={() => setShowProducaoForm(false)}
+                                                className="px-6 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // Renderizar Horas
+            const renderHoras = () => {
+                const horasTotal = calcularHorasTotal();
+                
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Horas de Trabalho</h2>
+                        
+                        <button 
+                            onClick={() => setShowHorasForm(true)}
+                            className="w-full bg-indigo-600 text-white p-3 rounded-lg font-semibold mb-6"
+                        >
+                            Registar Horas
+                        </button>
+                        
+                        {/* Resumo */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-indigo-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-indigo-700">Total Acumulado</p>
+                                <p className="text-xl font-bold text-indigo-800">{horasTotal.toFixed(1)} horas</p>
+                            </div>
+                            <div className="bg-teal-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-teal-700">Dias de Trabalho</p>
+                                <p className="text-xl font-bold text-teal-800">{(horasTotal / 8).toFixed(1)} dias</p>
+                            </div>
+                        </div>
+                        
+                        {/* Lista */}
+                        <div className="bg-white rounded-xl shadow overflow-hidden">
+                            <h3 className="font-bold text-gray-800 p-4 bg-gray-50">Histórico de Horas</h3>
+                            <div className="max-h-96 overflow-y-auto">
+                                {horasTrabalho.length === 0 ? (
+                                    <p className="p-8 text-center text-gray-500">Sem registos de horas</p>
+                                ) : (
+                                    horasTrabalho.slice().reverse().map(horas => {
+                                        const inicio = new Date(`2000-01-01T${horas.horaInicio}`);
+                                        const fim = new Date(`2000-01-01T${horas.horaFim}`);
+                                        const duracao = (fim - inicio) / (1000 * 60 * 60);
+                                        
+                                        return (
+                                            <div key={horas.id} className="p-4 border-b">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                                                {horas.horaInicio} - {horas.horaFim}
+                                                            </span>
+                                                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                                {horas.tipo}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm">{horas.descricao || 'Sem descrição'}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            {new Date(horas.data).toLocaleDateString('pt-PT')}
+                                                        </p>
+                                                    </div>
+                                                    <p className="font-bold text-indigo-700">
+                                                        {duracao.toFixed(1)}h
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Modal Horas */}
+                        {showHorasForm && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-5 rounded-xl shadow-xl w-full max-w-md">
+                                    <h3 className="font-bold text-gray-800 mb-4">Registar Horas</h3>
+                                    <div className="space-y-3">
+                                        <input 
+                                            type="date"
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novasHoras.data}
+                                            onChange={(e) => setNovasHoras({...novasHoras, data: e.target.value})}
+                                        />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input 
+                                                type="time"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novasHoras.horaInicio}
+                                                onChange={(e) => setNovasHoras({...novasHoras, horaInicio: e.target.value})}
+                                            />
+                                            <input 
+                                                type="time"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novasHoras.horaFim}
+                                                onChange={(e) => setNovasHoras({...novasHoras, horaFim: e.target.value})}
+                                            />
+                                        </div>
+                                        <select 
+                                            className="w-full p-3 border rounded-lg"
+                                            value={novasHoras.tipo}
+                                            onChange={(e) => setNovasHoras({...novasHoras, tipo: e.target.value})}
+                                        >
+                                            <option value="manutencao">Manutenção</option>
+                                            <option value="colheita">Colheita</option>
+                                            <option value="poda">Poda</option>
+                                            <option value="tratamento">Tratamento</option>
+                                            <option value="rega">Rega</option>
+                                            <option value="administrativo">Administrativo</option>
+                                            <option value="outro">Outro</option>
+                                        </select>
+                                        <textarea 
+                                            placeholder="Descrição do trabalho..."
+                                            className="w-full p-3 border rounded-lg"
+                                            rows="2"
+                                            value={novasHoras.descricao}
+                                            onChange={(e) => setNovasHoras({...novasHoras, descricao: e.target.value})}
+                                        />
+                                        <div className="flex gap-3">
+                                            <button 
+                                                onClick={adicionarHoras}
+                                                className="flex-1 bg-green-600 text-white p-3 rounded-lg font-semibold"
+                                            >
+                                                Guardar
+                                            </button>
+                                            <button 
+                                                onClick={() => setShowHorasForm(false)}
+                                                className="px-6 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // Renderizar Setores
+            const renderSetores = () => {
+                const calcularProducaoPorSetor = (setorId) => {
+                    return producoes
+                        .filter(p => p.setor == setorId)
+                        .reduce((total, p) => total + parseFloat(p.quantidade || 0), 0);
+                };
+                
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Setores da Plantação</h2>
+                        
+                        {/* Botão adicionar setor */}
+                        <button 
+                            onClick={() => {
+                                setEditandoSetorId(null);
+                                setNovoSetor({
+                                    nome: '',
+                                    area: '',
+                                    variedade: '',
+                                    plantasTotal: '',
+                                    gpsLink: ''
+                                });
+                                setShowSetorForm(true);
+                            }}
+                            className="w-full bg-green-600 text-white p-3 rounded-lg font-semibold mb-6 flex items-center justify-center gap-2"
+                        >
+                            <Icon name="plus" size={20} />
+                            Adicionar Novo Setor
+                        </button>
+                        
+                        {/* Resumo total */}
+                        <div className="bg-gray-100 p-4 rounded-xl mb-6">
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                                <div>
+                                    <p className="text-xs text-gray-600">Área Total</p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                        {setores.reduce((t, s) => t + s.area, 0).toFixed(1)} Ha
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-600">Plantas</p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                        {setores.reduce((t, s) => t + s.plantasTotal, 0)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-600">Produção</p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                        {calcularProducaoTotal().toFixed(0)} kg
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Cards dos setores */}
+                        <div className="space-y-4">
+                            {setores.map((setor, index) => {
+                                const cores = ['#10b981', '#0ea5e9', '#a855f7', '#f59e0b', '#ef4444'];
+                                const cor = cores[index % cores.length];
+                                const producaoSetor = calcularProducaoPorSetor(setor.id);
+                                
+                                return (
+                                    <div 
+                                        key={setor.id} 
+                                        className="bg-white rounded-xl shadow-lg overflow-hidden"
+                                        style={{ borderLeft: `5px solid ${cor}` }}
+                                    >
+                                        <div className="p-4">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <h3 className="text-xl font-bold" style={{ color: cor }}>
+                                                    {setor.nome}
+                                                </h3>
+                                                <div className="flex gap-2">
+                                                    {setor.gpsLink && (
+                                                        <a 
+                                                            href={setor.gpsLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-600 hover:text-blue-800"
+                                                        >
+                                                            <Icon name="map-pin" size={20} />
+                                                        </a>
+                                                    )}
+                                                    <button
+                                                        onClick={() => iniciarEdicaoSetor(setor)}
+                                                        className="text-gray-600 hover:text-gray-800"
+                                                    >
+                                                        <Icon name="edit" size={20} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => eliminarSetor(setor.id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                    >
+                                                        <Icon name="trash-2" size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div>
+                                                    <span className="text-gray-600">Área:</span>
+                                                    <p className="font-semibold">{setor.area} Ha</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-600">Variedade:</span>
+                                                    <p className="font-semibold">{setor.variedade}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-600">Nº Plantas:</span>
+                                                    <p className="font-semibold">{setor.plantasTotal}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-600">Densidade:</span>
+                                                    <p className="font-semibold">{(setor.plantasTotal / setor.area).toFixed(0)} plantas/Ha</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-600">Produção:</span>
+                                                    <p className="font-semibold">{producaoSetor.toFixed(1)} kg</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-gray-600">Produtividade:</span>
+                                                    <p className="font-semibold">
+                                                        {setor.plantasTotal > 0 ? (producaoSetor / setor.plantasTotal).toFixed(2) : 0} kg/planta
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        
+                        {/* Instruções GPS */}
+                        <div className="mt-6 bg-blue-50 p-4 rounded-lg">
+                            <h4 className="font-bold text-blue-800 mb-2">Como adicionar localização GPS:</h4>
+                            <ol className="text-sm text-blue-700 space-y-1">
+                                <li>1. Abra o Google Maps no computador</li>
+                                <li>2. Desenhe o perímetro do setor usando "Medir distância"</li>
+                                <li>3. Ou marque um ponto central do setor</li>
+                                <li>4. Clique em "Partilhar" e copie o link</li>
+                                <li>5. Cole o link no campo "Link GPS" ao criar/editar o setor</li>
+                            </ol>
+                        </div>
+                        
+                        {/* Modal Formulário Setor */}
+                        {showSetorForm && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-5 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                                    <h3 className="font-bold text-gray-800 mb-4">
+                                        {editandoSetorId ? 'Editar Setor' : 'Novo Setor'}
+                                    </h3>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Nome do Setor *
+                                            </label>
+                                            <input 
+                                                type="text"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novoSetor.nome}
+                                                onChange={(e) => setNovoSetor({...novoSetor, nome: e.target.value})}
+                                                placeholder="Ex: Setor Norte"
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Área (Ha) *
+                                            </label>
+                                            <input 
+                                                type="number"
+                                                step="0.1"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novoSetor.area}
+                                                onChange={(e) => setNovoSetor({...novoSetor, area: e.target.value})}
+                                                placeholder="0.0"
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Variedade *
+                                            </label>
+                                            <input 
+                                                type="text"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novoSetor.variedade}
+                                                onChange={(e) => setNovoSetor({...novoSetor, variedade: e.target.value})}
+                                                placeholder="Ex: Duke, Bluecrop, Legacy"
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Número de Plantas *
+                                            </label>
+                                            <input 
+                                                type="number"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novoSetor.plantasTotal}
+                                                onChange={(e) => setNovoSetor({...novoSetor, plantasTotal: e.target.value})}
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Link GPS (Google Maps)
+                                            </label>
+                                            <input 
+                                                type="url"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novoSetor.gpsLink}
+                                                onChange={(e) => setNovoSetor({...novoSetor, gpsLink: e.target.value})}
+                                                placeholder="https://maps.google.com/..."
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Opcional: Cole aqui o link do Google Maps com a localização
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="flex gap-3 pt-4">
+                                            <button 
+                                                onClick={salvarSetor}
+                                                className="flex-1 bg-green-600 text-white p-3 rounded-lg font-semibold"
+                                            >
+                                                {editandoSetorId ? 'Guardar Alterações' : 'Adicionar Setor'}
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    setShowSetorForm(false);
+                                                    setEditandoSetorId(null);
+                                                    setNovoSetor({
+                                                        nome: '',
+                                                        area: '',
+                                                        variedade: '',
+                                                        plantasTotal: '',
+                                                        gpsLink: ''
+                                                    });
+                                                }}
+                                                className="px-6 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // Renderizar Operações Culturais
+            const renderOperacoes = () => {
+                const horasOperacoes = calcularHorasOperacoes();
+                const custoOperacoes = calcularCustoOperacoes();
+                
+                const tiposOperacao = {
+                    'poda': { nome: 'Poda', icon: 'scissors', cor: '#8b5cf6' },
+                    'manutencao_entrelinha': { nome: 'Manutenção Entrelinha', icon: 'grid-3x3', cor: '#3b82f6' },
+                    'manutencao_infestantes': { nome: 'Manutenção Infestantes', icon: 'sprout', cor: '#10b981' },
+                    'adubo_foliar': { nome: 'Adubo Foliar', icon: 'droplets', cor: '#06b6d4' },
+                    'tratamento_fitosanitario': { nome: 'Tratamento Fitosanitário', icon: 'shield', cor: '#f59e0b' },
+                    'outros': { nome: 'Outros', icon: 'more-horizontal', cor: '#6b7280' }
+                };
+                
+                return (
+                    <div className="p-4 pb-20">
+                        <h2 className="text-2xl font-bold text-green-800 mb-6">Operações Culturais</h2>
+                        
+                        <button 
+                            onClick={() => setShowOperacaoForm(true)}
+                            className="w-full bg-teal-600 text-white p-3 rounded-lg font-semibold mb-6 flex items-center justify-center gap-2"
+                        >
+                            <Icon name="plus" size={20} />
+                            Registar Operação
+                        </button>
+                        
+                        {/* Resumo */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-teal-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-teal-700">Horas em Operações</p>
+                                <p className="text-xl font-bold text-teal-800">{horasOperacoes.toFixed(1)} horas</p>
+                            </div>
+                            <div className="bg-orange-50 p-4 rounded-xl shadow">
+                                <p className="text-sm text-orange-700">Custo Total</p>
+                                <p className="text-xl font-bold text-orange-800">€{custoOperacoes.toFixed(2)}</p>
+                            </div>
+                        </div>
+                        
+                        {/* Resumo por tipo */}
+                        <div className="bg-gray-100 p-4 rounded-xl mb-6">
+                            <h3 className="font-bold text-gray-800 mb-3">Resumo por Tipo</h3>
+                            <div className="space-y-2">
+                                {Object.entries(tiposOperacao).map(([tipo, info]) => {
+                                    const operacoesTipo = operacoesCulturais.filter(op => op.tipo === tipo);
+                                    const horasTipo = operacoesTipo.reduce((total, op) => {
+                                        const inicio = new Date(`2000-01-01T${op.horaInicio}`);
+                                        const fim = new Date(`2000-01-01T${op.horaFim}`);
+                                        const horas = (fim - inicio) / (1000 * 60 * 60);
+                                        return total + (horas > 0 ? horas : 0);
+                                    }, 0);
+                                    
+                                    if (operacoesTipo.length === 0) return null;
+                                    
+                                    return (
+                                        <div key={tipo} className="flex items-center justify-between text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: info.cor }}></div>
+                                                <span>{info.nome}</span>
+                                            </div>
+                                            <span className="font-semibold">{horasTipo.toFixed(1)}h</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        
+                        {/* Lista */}
+                        <div className="bg-white rounded-xl shadow overflow-hidden">
+                            <h3 className="font-bold text-gray-800 p-4 bg-gray-50">Histórico de Operações</h3>
+                            <div className="max-h-96 overflow-y-auto">
+                                {operacoesCulturais.length === 0 ? (
+                                    <p className="p-8 text-center text-gray-500">Sem operações registadas</p>
+                                ) : (
+                                    operacoesCulturais.slice().reverse().map(operacao => {
+                                        const inicio = new Date(`2000-01-01T${operacao.horaInicio}`);
+                                        const fim = new Date(`2000-01-01T${operacao.horaFim}`);
+                                        const duracao = (fim - inicio) / (1000 * 60 * 60);
+                                        const tipoInfo = tiposOperacao[operacao.tipo];
+                                        
+                                        return (
+                                            <div key={operacao.id} className="p-4 border-b">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span 
+                                                                className="text-xs px-2 py-1 rounded-full text-white"
+                                                                style={{ backgroundColor: tipoInfo.cor }}
+                                                            >
+                                                                {tipoInfo.nome}
+                                                            </span>
+                                                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                                                {setores.find(s => s.id == operacao.setor)?.nome}
+                                                            </span>
+                                                            <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                                                {operacao.horaInicio} - {operacao.horaFim}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm">{operacao.descricao || 'Sem descrição'}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            {new Date(operacao.data).toLocaleDateString('pt-PT')}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right ml-4">
+                                                        <p className="font-bold text-teal-700">{duracao.toFixed(1)}h</p>
+                                                        {operacao.temCusto ? (
+                                                            <p className="text-sm font-semibold text-orange-700">€{operacao.custo.toFixed(2)}</p>
+                                                        ) : (
+                                                            <p className="text-xs text-gray-500">Não estimado</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Modal Operação */}
+                        {showOperacaoForm && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-5 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                                    <h3 className="font-bold text-gray-800 mb-4">Registar Operação Cultural</h3>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Tipo de Operação *
+                                            </label>
+                                            <select 
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novaOperacao.tipo}
+                                                onChange={(e) => setNovaOperacao({...novaOperacao, tipo: e.target.value})}
+                                            >
+                                                <option value="poda">Poda</option>
+                                                <option value="manutencao_entrelinha">Manutenção Entrelinha</option>
+                                                <option value="manutencao_infestantes">Manutenção Infestantes</option>
+                                                <option value="adubo_foliar">Adubo Foliar</option>
+                                                <option value="tratamento_fitosanitario">Tratamento Fitosanitário</option>
+                                                <option value="outros">Outros</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Setor *
+                                            </label>
+                                            <select 
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novaOperacao.setor}
+                                                onChange={(e) => setNovaOperacao({...novaOperacao, setor: e.target.value})}
+                                            >
+                                                <option value="">Selecione o setor...</option>
+                                                {setores.map(s => (
+                                                    <option key={s.id} value={s.id}>{s.nome}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Data *
+                                            </label>
+                                            <input 
+                                                type="date"
+                                                className="w-full p-3 border rounded-lg"
+                                                value={novaOperacao.data}
+                                                onChange={(e) => setNovaOperacao({...novaOperacao, data: e.target.value})}
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Horário *
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <input 
+                                                    type="time"
+                                                    className="w-full p-3 border rounded-lg"
+                                                    value={novaOperacao.horaInicio}
+                                                    onChange={(e) => setNovaOperacao({...novaOperacao, horaInicio: e.target.value})}
+                                                    placeholder="Início"
+                                                />
+                                                <input 
+                                                    type="time"
+                                                    className="w-full p-3 border rounded-lg"
+                                                    value={novaOperacao.horaFim}
+                                                    onChange={(e) => setNovaOperacao({...novaOperacao, horaFim: e.target.value})}
+                                                    placeholder="Fim"
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Custo
+                                            </label>
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <label className="flex items-center gap-2">
+                                                    <input 
+                                                        type="radio"
+                                                        checked={novaOperacao.temCusto}
+                                                        onChange={() => setNovaOperacao({...novaOperacao, temCusto: true})}
+                                                    />
+                                                    <span className="text-sm">Com custo</span>
+                                                </label>
+                                                <label className="flex items-center gap-2">
+                                                    <input 
+                                                        type="radio"
+                                                        checked={!novaOperacao.temCusto}
+                                                        onChange={() => setNovaOperacao({...novaOperacao, temCusto: false, custo: ''})}
+                                                    />
+                                                    <span className="text-sm">Não estimado</span>
+                                                </label>
+                                            </div>
+                                            {novaOperacao.temCusto && (
+                                                <input 
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="Valor (€)"
+                                                    className="w-full p-3 border rounded-lg"
+                                                    value={novaOperacao.custo}
+                                                    onChange={(e) => setNovaOperacao({...novaOperacao, custo: e.target.value})}
+                                                />
+                                            )}
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Descrição
+                                            </label>
+                                            <textarea 
+                                                placeholder="Descrição da operação..."
+                                                className="w-full p-3 border rounded-lg"
+                                                rows="3"
+                                                value={novaOperacao.descricao}
+                                                onChange={(e) => setNovaOperacao({...novaOperacao, descricao: e.target.value})}
+                                            />
+                                        </div>
+                                        
+                                        <div className="flex gap-3 pt-4">
+                                            <button 
+                                                onClick={adicionarOperacao}
+                                                className="flex-1 bg-green-600 text-white p-3 rounded-lg font-semibold"
+                                            >
+                                                Guardar
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    setShowOperacaoForm(false);
+                                                    setNovaOperacao({
+                                                        data: new Date().toISOString().split('T')[0],
+                                                        tipo: 'poda',
+                                                        setor: '',
+                                                        horaInicio: '',
+                                                        horaFim: '',
+                                                        temCusto: true,
+                                                        custo: '',
+                                                        descricao: ''
+                                                    });
+                                                }}
+                                                className="px-6 bg-gray-200 text-gray-700 p-3 rounded-lg font-semibold"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+            
+            // Inicializar gráfico
+            useEffect(() => {
+                if (activeTab === 'dashboard' && chartRef.current) {
+                    setTimeout(criarGrafico, 100);
+                }
+            }, [activeTab, registos]);
+            
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-green-50 to-sky-50">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-green-600 to-sky-500 text-white p-4 shadow-lg safe-top">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                    <Icon name="leaf" className="text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold">Quinta da Simbiose</h1>
+                                    <p className="text-xs opacity-90">Produção Mirtilo</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setShowConfiguracao(true)}
+                                className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition"
+                            >
+                                <Icon name="settings" size={20} />
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Conteúdo */}
+                    <div className="fade-in">
+                        {activeTab === 'dashboard' && renderDashboard()}
+                        {activeTab === 'registos' && renderRegistos()}
+                        {activeTab === 'producao' && renderProducao()}
+                        {activeTab === 'horas' && renderHoras()}
+                        {activeTab === 'setores' && renderSetores()}
+                        {activeTab === 'operacoes' && renderOperacoes()}
+                    </div>
+                    
+                    {/* Modal Configuração */}
+                    {showConfiguracao && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                            <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="font-bold text-gray-800 text-lg">Configurações</h3>
+                                    <button 
+                                        onClick={() => setShowConfiguracao(false)}
+                                        className="text-gray-500 hover:text-gray-700"
+                                    >
+                                        <Icon name="x" size={24} />
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    {/* Botão Instalar PWA */}
+                                    {isInstallable && (
+                                        <div className="p-4 bg-purple-50 rounded-lg">
+                                            <h4 className="font-semibold text-purple-800 mb-2 flex items-center gap-2">
+                                                <Icon name="smartphone" size={18} />
+                                                Instalar App
+                                            </h4>
+                                            <p className="text-sm text-purple-600 mb-3">
+                                                Instale a aplicação no seu dispositivo para acesso rápido.
+                                            </p>
+                                            <button 
+                                                onClick={handleInstallClick}
+                                                className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold"
+                                            >
+                                                Instalar Agora
+                                            </button>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Exportar Dados */}
+                                    <div className="p-4 bg-blue-50 rounded-lg">
+                                        <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                                            <Icon name="download" size={18} />
+                                            Exportar Dados
+                                        </h4>
+                                        <p className="text-sm text-blue-600 mb-3">
+                                            Faça backup de todos os seus dados num ficheiro JSON.
+                                        </p>
+                                        <button 
+                                            onClick={exportarDados}
+                                            className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold"
+                                        >
+                                            Exportar Dados
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Importar Dados */}
+                                    <div className="p-4 bg-green-50 rounded-lg">
+                                        <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                                            <Icon name="upload" size={18} />
+                                            Importar Dados
+                                        </h4>
+                                        <p className="text-sm text-green-600 mb-3">
+                                            Restaure dados a partir de um backup anterior.
+                                        </p>
+                                        <label className="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-semibold cursor-pointer text-center block">
+                                            Importar Dados
+                                            <input 
+                                                type="file"
+                                                accept=".json"
+                                                onChange={importarDados}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                    </div>
+                                    
+                                    {/* Aviso */}
+                                    <div className="p-4 bg-yellow-50 rounded-lg">
+                                        <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
+                                            <Icon name="alert-triangle" size={18} />
+                                            Importante
+                                        </h4>
+                                        <p className="text-sm text-yellow-700">
+                                            Os dados são guardados localmente no seu navegador. 
+                                            Faça backups regulares para não perder informação importante.
+                                        </p>
+                                    </div>
+                                    
+                                    {/* Info da App */}
+                                    <div className="text-center text-sm text-gray-500 pt-2">
+                                        <p>Quinta da Simbiose - Gestão Mirtilo</p>
+                                        <p>Versão 1.1 PWA</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Navegação */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-xl safe-bottom">
+                        <div className="nav-grid-6">
+                            <button 
+                                onClick={() => setActiveTab('dashboard')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'dashboard' ? 'text-green-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="home" size={20} />
+                                <span className="text-[10px]">Home</span>
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('registos')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'registos' ? 'text-sky-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="euro" size={20} />
+                                <span className="text-[10px]">Finanças</span>
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('producao')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'producao' ? 'text-emerald-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="package" size={20} />
+                                <span className="text-[10px]">Produção</span>
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('horas')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'horas' ? 'text-indigo-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="clock" size={20} />
+                                <span className="text-[10px]">Horas</span>
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('setores')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'setores' ? 'text-purple-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="map" size={20} />
+                                <span className="text-[10px]">Setores</span>
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('operacoes')}
+                                className={`p-3 flex flex-col items-center gap-1 ${
+                                    activeTab === 'operacoes' ? 'text-teal-600' : 'text-gray-500'
+                                }`}
+                            >
+                                <Icon name="settings" size={20} />
+                                <span className="text-[10px]">Operações</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Renderizar
+        ReactDOM.render(<MirtiloApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
+                                            
